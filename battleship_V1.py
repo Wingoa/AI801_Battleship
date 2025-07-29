@@ -11,9 +11,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Simplified Environment
 class SimpleBattleshipEnv(gym.Env):
     def __init__(self):
-        self.board_size = 8
-        self.ship_cells = 6
-        self.max_steps = 50
+        self.board_size = 10
+        self.ship_cells = 7
+        self.max_steps = 93
         self.action_space = gym.spaces.Discrete(self.board_size ** 2)
         self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(self.board_size ** 2,), dtype=np.int32)
 
@@ -34,22 +34,23 @@ class SimpleBattleshipEnv(gym.Env):
         truncated = False
 
         if self.board[action] != 0:  # Already picked
-            reward = -5.0
+            reward = -15.0
         elif self.hidden[action] == 1:  # Hit
-            reward = 15.0
+            reward = 25.0
             self.hits += 1
             self.board[action] = 1
         else:  # Miss
-            reward = -0.15
+            reward = -0.5
             self.board[action] = -1
 
         self.steps += 1
 
         if self.hits == self.ship_cells:
-            reward += 40.0  # Win bonus
+            reward += 35.0  # Win bonus
             terminated = True
+            
         elif self.steps >= self.max_steps:
-            reward -= 10.0  # Time penalty
+            reward -= 2.5  # Time penalty
             truncated = True
 
         return self.board.copy(), reward, terminated, truncated, {}
