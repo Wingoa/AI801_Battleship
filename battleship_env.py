@@ -25,18 +25,18 @@ class BattleshipEnv(gym.Env):
 
         super().__init__()
 
-        # Use the default ships and sizes based on the board game
+        # This is now dynamic, grid size and # of ships will vary as the training increases
         self.ships = ships or default_ships
         self.total_ship_cells = sum(self.ships.values())
 
-        # Define the board size which will be squared - 10x10 grid
+        # Define the board size which will be squared - 5x5, 6x6 ... 10x10 grid
         self.board_size = board_size
 
         # Action: Autosized based on parameters
         self.action_space = spaces.Discrete(self.board_size * self.board_size)
         self.max_steps = max_steps or 2 * self.board_size * self.board_size
 
-        # Observ  ation: 10x10 grid of {0, 1, -1} values (unknown, hit, miss)
+        # Observation: grid of {0, 1, -1} values (unknown, hit, miss) and size of the board being trained
         self.observation_space = spaces.Box(low=-1, high=1, shape=(self.board_size, self.board_size), dtype=np.int8)
 
         # Initialize state variables
@@ -47,7 +47,7 @@ class BattleshipEnv(gym.Env):
         # Board the agent observes (hits/misses)
         self.obs_board = None
 
-        # Total number of cells occupied by ships.  Could be static value but in case we change the sizes, sum is best
+        # Total number of cells occupied by ships.
         # Set remaining cells to total ship cells initially
         self.total_ship_cells = sum(self.ships.values())
         self.ship_cells_remaining = self.total_ship_cells
@@ -126,7 +126,7 @@ class BattleshipEnv(gym.Env):
         info = {}
 
         # Check if the agent already shot here
-        # With new logic should never revisit
+        # With new logic should never revisit a cell
         if self.obs_board[self.row][self.col] != 0:
             # This cell was already revealed (hit or miss before)
             # Penalize repeat move
@@ -144,7 +144,7 @@ class BattleshipEnv(gym.Env):
             else:
                 # It's a miss!
                 self.obs_board[self.row][self.col] = -1  # Mark the cell as a miss in the observation board
-                reward = -.5  # Small penalty for a miss to encourage fewer moves
+                reward = -.1  # Small penalty for a miss to encourage fewer moves
 
         # Check if all ships have been sunk
         if self.ship_cells_remaining == 0:
@@ -152,7 +152,7 @@ class BattleshipEnv(gym.Env):
             done = True
             terminated = True
             truncated = False
-            reward = 100
+            reward = 10
         elif self.steps_taken >= self.max_steps:
             # Reached max allowed steps without finding all ships
             done = True

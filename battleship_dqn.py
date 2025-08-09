@@ -72,7 +72,8 @@ class DQNAgent:
         self.memory = ReplayMemory(memory_capacity)
 
     def select_action(self, state, eps_threshold):
-        # state: numpy array shape [100]
+        # state: numpy array shape [100] for 10x10 but dynamic now
+
         avail = np.where(state == 0)[0]  # indices of unvisited cells
 
         # Exploration: uniform among available
@@ -99,14 +100,14 @@ class DQNAgent:
         batch = self.memory.sample(self.batch_size)
         trans = Transition(*zip(*batch))
 
-        # 1) stack into contiguous NumPy arrays
+        # stack into contiguous NumPy arrays
         states_np      = np.array(trans.state,      dtype=np.float32)
         next_states_np = np.array(trans.next_state, dtype=np.float32)
         actions_np     = np.array(trans.action,     dtype=np.int64)
         rewards_np     = np.array(trans.reward,     dtype=np.float32)
         dones_np       = np.array(trans.done,       dtype=np.float32)
 
-        # 2) one‐shot conversion to torch.Tensors
+        # one‐shot conversion to torch.Tensors
         states      = torch.from_numpy(states_np).to(self.device)
         next_states = torch.from_numpy(next_states_np).to(self.device)
         actions     = torch.from_numpy(actions_np).unsqueeze(1).to(self.device)
