@@ -12,11 +12,12 @@ def train_varying_ships(
     episodes_per_setting=200,
     start_ships=1,
     eps_start=1.0,
-    eps_final=0.01,
+    eps_final=0.001,
     eps_decay=5000
 ):
     ship_items = list(default_ships.items())
-    max_ships = len(ship_items)
+    #max_ships = len(ship_items)
+    max_ships=1
 
     agent = DQNAgent(
         state_dim=board_size * board_size,
@@ -33,6 +34,10 @@ def train_varying_ships(
     for n_ships in range(start_ships, max_ships + 1):
         ships_subset = dict(ship_items[:n_ships])
         env = BattleshipEnv(board_size=board_size, ships=ships_subset)
+
+        # Reset the memory after each ship
+
+        agent.memory.clear()
 
         print(f"\n=== Training: {board_size}×{board_size}, {n_ships} ship(s) ===")
 
@@ -81,13 +86,12 @@ def train_varying_ships(
         # After training is complete, compute & plot cumulative average shots to win
         # Numpy could have named this function something a lot better IMO
 
-    '''
         if shots_to_win:
             cumlative_avg_shots = np.cumsum(shots_to_win) / np.arange(1, len(shots_to_win) + 1)
 
             plt.figure(figsize=(10, 5))
             plt.plot(win_episodes, cumlative_avg_shots, linewidth=2, label='Cumulative Avg Shots to Win')
-            plt.xlabel('Global Episode Number (only wins shown)')
+            plt.xlabel('Global Episode Number')
             plt.ylabel('Average Shots per Win')
             plt.title('Agent Learning Curve: Shots-to-Win Over Training')
             plt.grid(True)
@@ -96,7 +100,6 @@ def train_varying_ships(
             plt.show()
         else:
             print("No wins recorded—nothing to plot.")
-    '''
 
     return agent
 
@@ -108,12 +111,17 @@ def main():
         print(f"\n>>> Starting curriculum training on {size}×{size} board <<<")
 
         # Try increasing episodes as size of the grid expands
+        # This didn't produce any better results for reverting to 200 per
+        '''
         if size in (5, 6):
             episodes_per_setting = 200
         elif size in (7, 8):
             episodes_per_setting = 300
         else:
             episodes_per_setting = 500
+        '''
+
+        episodes_per_setting = 500
 
         # Call the training agent with ever increasing board sizes
         trained_agent = train_varying_ships(

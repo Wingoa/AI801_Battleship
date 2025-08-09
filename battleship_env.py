@@ -130,7 +130,6 @@ class BattleshipEnv(gym.Env):
         if self.obs_board[self.row][self.col] != 0:
             # This cell was already revealed (hit or miss before)
             # Penalize repeat move
-            #reward = -0.5  # negative reward for redundant guess
             reward = -5   # negative reward for redundant guess
         else:
             # This is a new cell being targeted
@@ -144,7 +143,7 @@ class BattleshipEnv(gym.Env):
             else:
                 # It's a miss!
                 self.obs_board[self.row][self.col] = -1  # Mark the cell as a miss in the observation board
-                reward = -.1  # Small penalty for a miss to encourage fewer moves
+                reward = -1  # Small penalty for a miss to encourage fewer moves
 
         # Check if all ships have been sunk
         if self.ship_cells_remaining == 0:
@@ -156,7 +155,7 @@ class BattleshipEnv(gym.Env):
         elif self.steps_taken >= self.max_steps:
             # Reached max allowed steps without finding all ships
             done = True
-            terminated = False  # not all ships were found so treat as failure due to timeout
+            terminated = False  # not all ships were found so treat as failure
             truncated = True
         else:
             done = False
@@ -178,7 +177,7 @@ def train(env_name='Battleship-v0', num_episodes=1000):
         device='cuda' if torch.cuda.is_available() else 'cpu'
     )
 
-    eps_start, eps_end, eps_decay = 1.0, 0.01, 1000
+    eps_start, eps_end, eps_decay = 1.0, 0.001, 1000
     total_rewards, wins, hits_to_win = [], [], []
 
     for episode in range(1, num_episodes + 1):

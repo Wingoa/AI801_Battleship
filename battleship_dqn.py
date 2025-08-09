@@ -31,6 +31,10 @@ class ReplayMemory:
     def __len__(self):
         return len(self.memory)
 
+    def clear(self):
+        self.memory = []
+        self.position = 0
+
 class QNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim=128):
         super().__init__()
@@ -52,7 +56,7 @@ class DQNAgent:
         action_dim,
         device='cpu',
         gamma=0.99,
-        lr=1e-3,
+        lr=0.0001,
         batch_size=64,
         memory_capacity=10000,
         target_update_freq=1000
