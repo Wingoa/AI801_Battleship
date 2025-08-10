@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import gymnasium as gym
 from gymnasium import spaces
-
+from battleship_dqn import DQNAgent
 from gymnasium.envs.registration import register, registry
 
 if 'Battleship-v0' not in registry:
