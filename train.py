@@ -12,7 +12,7 @@ def train_varying_ships(
     episodes_per_setting=200,
     start_ships=1,
     eps_start=1.0,
-    eps_final=0.001,
+    eps_final=0.05,
     eps_decay=5000
 ):
     ship_items = list(default_ships.items())
@@ -50,14 +50,13 @@ def train_varying_ships(
             last_reward = 0.0
             terminated = False
 
+
             while not done:
                 eps = eps_final + (eps_start - eps_final) * np.exp(-global_step / eps_decay)
                 action = agent.select_action(obs.flatten(), eps)
-                obs2, reward, term, trunc, info = env.step(action)
+                obs2, reward, term, trunc, info = env.step(action, player="ai")
                 done = term or trunc
-
-                # push and learn
-
+                
                 agent.memory.push(obs.flatten(), action, reward, obs2.flatten(), done)
                 agent.update()
 
@@ -98,6 +97,8 @@ def train_varying_ships(
             plt.legend()
             plt.tight_layout()
             plt.show()
+
+
         else:
             print("No wins recorded—nothing to plot.")
 
@@ -129,7 +130,7 @@ def main():
             episodes_per_setting=episodes_per_setting,
             start_ships=1,
             eps_start=1.0,
-            eps_final=0.01,
+            eps_final=0.05,
             eps_decay=5000
         )
 
