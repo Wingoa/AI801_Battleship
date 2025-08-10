@@ -21,101 +21,65 @@ default_ships = {'Carrier': 5, 'Battleship': 4, 'Cruiser': 3, 'Submarine': 3, 'D
 
 class BattleshipEnv(gym.Env):
 
-    def __init__(self, board_size=10, ships=None, max_steps=None):
-
+    def __init__(self, board_size=5, ships=None, max_steps=None):
         super().__init__()
-
-        # This is now dynamic, grid size and # of ships will vary as the training increases
         self.ships = ships or default_ships
-        self.total_ship_cells = sum(self.ships.values())
-
-        # Define the board size which will be squared - 5x5, 6x6 ... 10x10 grid
         self.board_size = board_size
-
-        # Action: Autosized based on parameters
         self.action_space = spaces.Discrete(self.board_size * self.board_size)
         self.max_steps = max_steps or 2 * self.board_size * self.board_size
-
-        # Observation: grid of {0, 1, -1} values (unknown, hit, miss) and size of the board being trained
         self.observation_space = spaces.Box(low=-1, high=1, shape=(self.board_size, self.board_size), dtype=np.int8)
-
-        # Initialize state variables
-
-        # Board for actual positions of ships
-        self.hidden_board = None
-
-        # Board the agent observes (hits/misses)
-        self.obs_board = None
-
-        # Total number of cells occupied by ships.
-        # Set remaining cells to total ship cells initially
         self.total_ship_cells = sum(self.ships.values())
-        self.ship_cells_remaining = self.total_ship_cells
-
-        # Will be used to record the number of hits (ship cells) found so far and how many shots taken each round
+        self.hidden_board = None
+        self.obs_board = None
         self.hits_found = 0
         self.shots_taken = 0
-
-        # Will be used to record the number of steps taken in current episode
         self.steps_taken = 0
-
-        # Rows and Cols - will use to track potential next targets after a hit
+        self.ship_cells_remaining = 0
+        self.ai_obs_board = None
         self.row = 0
         self.col = 0
         self.hit_list = []
+        self.reset()
 
-    # Reset the board for a new game
+    def get_state(self):
+        return np.array(self.obs_board, dtype=np.int32)
+
     def reset(self, *, seed=None, options=None):
-
         super().reset()
-
-        # Create empty boards, one hidden for the actual placement and one for the observation of agent moves
         self.hidden_board = [[0] * self.board_size for _ in range(self.board_size)]
         self.obs_board = [[0] * self.board_size for _ in range(self.board_size)]
         self.hits_found = 0
         self.steps_taken = 0
         self.shots_taken = 0
         self.ship_cells_remaining = self.total_ship_cells
-
-        # Loop through random placement of each ship vertically or horizontally
-        # If there is a clash on the placement due to overlapping cell(s) then
-        # attempt the placement again in another location and possible different orientation
-
+        self.ai_obs_board = [[0 for _ in range(self.board_size)] for _ in range(self.board_size)]
+        self.row = 0
+        self.col = 0
+        self.hit_list = []
         for ship_length in self.ships.values():
             placed = False
             while not placed:
-                # Random ship orientation of horizontal or vertical
                 orientation = random.choice(['horizontal', 'vertical'])
                 if orientation == 'horizontal':
                     row = random.randrange(0, self.board_size)
                     col = random.randrange(0, self.board_size - ship_length + 1)
-                    # Check if this group of cells is free for placement based on the size of the ship
                     if all(self.hidden_board[row][c] == 0 for c in range(col, col + ship_length)):
-                        # Place the ship by marking each cell with 1's
                         for c in range(col, col + ship_length):
                             self.hidden_board[row][c] = 1
                         placed = True
-                else:  # vertical
+                else:
                     row = random.randrange(0, self.board_size - ship_length + 1)
                     col = random.randrange(0, self.board_size)
                     if all(self.hidden_board[r][col] == 0 for r in range(row, row + ship_length)):
                         for r in range(row, row + ship_length):
                             self.hidden_board[r][col] = 1
                         placed = True
-
-
-        # Initial obs_board now looks like 10 iterations of [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]... for the 10x10 board
-        # (all cells unknown = 0)
-        # hidden_board will be 0's and 1's based on ship placement
-
         return np.array(self.obs_board, dtype=np.int32), {}
-
-    # Execute the agent firing at a cell
+    
     def step(self, action):
         # Decode the action (integer 0-99) into grid coordinates
-
-        self.row = action // self.board_size
-        self.col = action % self.board_size
+        row = action // self.board_size
+        col = action % self.board_size
 
         self.steps_taken += 1
         self.shots_taken += 1
@@ -126,34 +90,30 @@ class BattleshipEnv(gym.Env):
         info = {}
 
         # Check if the agent already shot here
-        # With new logic should never revisit a cell
-        if self.obs_board[self.row][self.col] != 0:
+        if self.obs_board[row][col] != 0:
             # This cell was already revealed (hit or miss before)
-            # Penalize repeat move
             reward = -5   # negative reward for redundant guess
         else:
             # This is a new cell being targeted
-            if self.hidden_board[self.row][self.col] == 1:
+            if self.hidden_board[row][col] == 1:
                 # It's a hit!
-                self.obs_board[self.row][self.col] = 1  # Mark the cell as hit in the observation board
+                self.obs_board[row][col] = 1  # Mark the cell as hit in the observation board
                 self.hits_found += 1
-                self.ship_cells_remaining -=1
+                self.ship_cells_remaining -= 1
                 hit = True
                 reward = 2.0  # reward for a hit
             else:
                 # It's a miss!
-                self.obs_board[self.row][self.col] = -1  # Mark the cell as a miss in the observation board
+                self.obs_board[row][col] = -1  # Mark the cell as a miss in the observation board
                 reward = -1  # Small penalty for a miss to encourage fewer moves
 
         # Check if all ships have been sunk
         if self.ship_cells_remaining == 0:
-            # All ship cells have been hit – game was a success
             done = True
             terminated = True
             truncated = False
             reward = 10
         elif self.steps_taken >= self.max_steps:
-            # Reached max allowed steps without finding all ships
             done = True
             terminated = False  # not all ships were found so treat as failure
             truncated = True
@@ -162,12 +122,9 @@ class BattleshipEnv(gym.Env):
             terminated = False
             truncated = False
 
-        # Prepare observation array to return
         obs_array = np.array(self.obs_board, dtype=np.int32)
-        info = {'ships_remaining': self.ship_cells_remaining, 'hit': hit, 'shots_taken': self.shots_taken,}
-        # Return observation, reward, termination flags, and info (Gymnasium API)
+        info = {'ships_remaining': self.ship_cells_remaining, 'hit': hit, 'shots_taken': self.shots_taken}
         return obs_array, reward, terminated, truncated, info
-
 
 def train(env_name='Battleship-v0', num_episodes=1000):
     env = gym.make(env_name)

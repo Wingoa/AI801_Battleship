@@ -132,3 +132,15 @@ class DQNAgent:
 
         if self.steps_done % self.update_freq == 0:
             self.target_net.load_state_dict(self.online_net.state_dict())
+
+    def get_action(self, state, eps_threshold):
+        return self.select_action(state, eps_threshold)
+
+    def save(self, filepath):
+        torch.save(self.online_net.state_dict(), filepath)
+        print(f"Model saved to {filepath}")
+
+    def load(self, filepath):
+        self.online_net.load_state_dict(torch.load(filepath))
+        self.online_net.eval() 
+        print(f"Model loaded from {filepath}")

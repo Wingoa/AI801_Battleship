@@ -107,7 +107,7 @@ def main():
     trained_agent = None
 
     # Loop through training on board sizes 5-10
-    for size in range(5, 11):  # 5,6,7,8,9,10
+    for size in range(5, 7):  # 5,6,7,8,9,10
         print(f"\n>>> Starting curriculum training on {size}×{size} board <<<")
 
         # Try increasing episodes as size of the grid expands
@@ -136,6 +136,15 @@ def main():
     return trained_agent
 
 if __name__ == "__main__":
-    # Kick off the training
+
+    # Kick off the training and get the trained agent
     agent = main()
+
+    # Save the trained agent
+    if agent is not None:
+        agent.save("trained_agent.pth")
+    else:
+        print("No trained agent to save.")
+
+
 
