@@ -3,6 +3,8 @@ import pygame
 import random
 from battleship_dqn import DQNAgent
 from battleship_env import BattleshipEnv  
+import sys
+import os
 
 pygame.init()
 screen = pygame.display.set_mode((625, 600))
@@ -12,18 +14,69 @@ font_large = pygame.font.SysFont(None, 48)
 font_small = pygame.font.SysFont(None, 32)
 ships_dict = {'Battleship': 4, 'Cruiser': 3}
 
+# Helper to find assets in PyInstaller bundle or source
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# Set window icon with rounded corners
+try:
+    icon_img = pygame.image.load(resource_path("assets/battleship_icon.png")).convert_alpha()
+    icon_img = pygame.transform.smoothscale(icon_img, (32, 32))
+
+    mask = pygame.Surface((32, 32), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=4)
+
+    icon_img.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    pygame.display.set_icon(icon_img)
+except Exception as e:
+    print(f"Warning: Unable to load icon image. {e}")
+    pass
+
+# Load Images
+cell_size = 50
+try:
+    # Load and scale images to the correct cell size
+    logo_img = pygame.image.load(resource_path("assets/battleship_logo.png")).convert_alpha()
+    logo_img = pygame.transform.smoothscale(logo_img, (400, 200))
+
+    water_img = pygame.image.load(resource_path("assets/water.png")).convert_alpha()
+    water_img = pygame.transform.scale(water_img, (cell_size, cell_size))
+
+    ai_hit_img = pygame.image.load(resource_path("assets/ai_hit.png")).convert_alpha()
+    ai_hit_img = pygame.transform.scale(ai_hit_img, (cell_size, cell_size))
+
+    user_hit_img = pygame.image.load(resource_path("assets/user_hit.png")).convert_alpha()
+    user_hit_img = pygame.transform.scale(user_hit_img, (cell_size, cell_size))
+
+    user_miss_img = pygame.image.load(resource_path("assets/user_miss.png")).convert_alpha()
+    user_miss_img = pygame.transform.scale(user_miss_img, (cell_size, cell_size))
+
+    ai_miss_img = pygame.image.load(resource_path("assets/ai_miss.png")).convert_alpha()
+    ai_miss_img = pygame.transform.scale(ai_miss_img, (cell_size, cell_size))
+
+    ship_img = pygame.image.load(resource_path("assets/ship.png")).convert_alpha()
+    ship_img = pygame.transform.scale(ship_img, (cell_size, cell_size))
+
+except pygame.error as e:
+    print(f"Error loading images: {e}")
+    pygame.quit()
+    exit()
+
+
 # Load environment just to get a ship layout for the user
 env = BattleshipEnv(board_size=6)
 env.ships = ships_dict
 env.reset()
 
-# Determine board/action dims for AI model (kept same size assumption)
+# Determine board/action dims for AI model 
 state_dim = env.board_size * env.board_size
 action_dim = env.board_size * env.board_size
 agent = DQNAgent(state_dim, action_dim)
-agent.load("trained_agent.pth")
+agent.load(resource_path("trained_agent.pth"))
 
-# --- Create AI hidden board (ships) ---
+# Create AI hidden ships
 def place_ships(board_size, ships_dict):
     board = [[0] * board_size for _ in range(board_size)]
     for length in ships_dict.values():
@@ -46,12 +99,10 @@ def place_ships(board_size, ships_dict):
                     placed = True
     return board
 
-# User's ships already in env.hidden_board
-# AI's ships we generate separately (reuse env.ships if present)
-# AI's ships are those in env.hidden_board (env models AI target board for user)
+# AI's ships are those in env.hidden_board
 ai_hidden = [row[:] for row in env.hidden_board]
 
-# User's ships we generate separately (reuse env.ships if present)
+# User's ships we generate separately
 user_hidden = place_ships(env.board_size, ships_dict)
 
 # Reinitialize guess boards
@@ -61,36 +112,18 @@ env.ai_obs_board = [[0] * env.board_size for _ in range(env.board_size)]    # AI
 ai_ship_cells_remaining = sum(sum(row) for row in ai_hidden)
 user_ship_cells_remaining = sum(sum(row) for row in user_hidden)
 
-# --- Load Images ---
-cell_size = 50
-try:
-    # Load and scale images to the correct cell size
-    water_img = pygame.image.load("assets/water.png").convert_alpha()
-    water_img = pygame.transform.scale(water_img, (cell_size, cell_size))
-
-    ai_hit_img = pygame.image.load("assets/ai_hit.png").convert_alpha()
-    ai_hit_img = pygame.transform.scale(ai_hit_img, (cell_size, cell_size))
-
-    user_hit_img = pygame.image.load("assets/user_hit.png").convert_alpha()
-    user_hit_img = pygame.transform.scale(user_hit_img, (cell_size, cell_size))
-
-    user_miss_img = pygame.image.load("assets/user_miss.png").convert_alpha()
-    user_miss_img = pygame.transform.scale(user_miss_img, (cell_size, cell_size))
-
-    ai_miss_img = pygame.image.load("assets/ai_miss.png").convert_alpha()
-    ai_miss_img = pygame.transform.scale(ai_miss_img, (cell_size, cell_size))
-
-    ship_img = pygame.image.load("assets/ship.png").convert_alpha()
-    ship_img = pygame.transform.scale(ship_img, (cell_size, cell_size))
-
-except pygame.error as e:
-    print(f"Error loading images: {e}")
-    pygame.quit()
-    exit()
+def draw_start_screen():
+    screen.fill((10, 20, 40))
+    if logo_img:
+        logo_rect = logo_img.get_rect(center=(screen.get_width() // 2, 180))
+        screen.blit(logo_img, logo_rect)
+    prompt_font = pygame.font.SysFont(None, 36)
+    prompt = prompt_font.render("Press any button to continue", True, (200, 200, 200))
+    prompt_rect = prompt.get_rect(center=(screen.get_width() // 2, 350))
+    screen.blit(prompt, prompt_rect)
+    pygame.display.flip()
 
 def draw_board():
-    if not isinstance(env, BattleshipEnv):
-        return
 
     margin = 20
 
@@ -152,20 +185,29 @@ def get_valid_user_actions(board):
                 valid_actions.append(r * env.board_size + c)
     return valid_actions
 
+
+# Game State Machine 
+game_state = "start" 
 running = True
-user_turn = True  # True => User's turn, False => AI's turn
+user_turn = True 
 game_over = False
 winner = None
 last_ai_move = None
 
+
 while running:
     for event in pygame.event.get():
+
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN and game_over:
-            if event.key == pygame.K_SPACE:
+            break
+
+        if game_state == "start":
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                # Start the game
+                game_state = "playing"
+                # Reset game state
                 env.reset()
-                # Rebuild boards
                 ai_hidden = [row[:] for row in env.hidden_board]
                 user_hidden = place_ships(env.board_size, getattr(env, 'ships', {'Battleship': 4, 'Cruiser': 3}))
                 env.obs_board = [[0] * env.board_size for _ in range(env.board_size)]
@@ -176,26 +218,49 @@ while running:
                 game_over = False
                 winner = None
                 last_ai_move = None
-        # --- USER INPUT MODE (commented out) ---
-        # To enable human play, comment out the block above and uncomment this block:
-        '''
-        elif user_turn and not pending_ai_move and not game_over:
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_x, mouse_y = event.pos
-                col = mouse_x // cell_size
-                row = mouse_y // cell_size
-                if 0 <= row < env.board_size and 0 <= col < env.board_size:
-                    if env.obs_board[row][col] == 0:
-                        action = row * env.board_size + col
-                        obs, reward, term, trunc, info = env.step(action)
-                        if term or trunc:
-                            game_over = True
-                            winner = "User"
-                        pending_ai_move = True
-                        pygame.time.delay(200)
-        '''
+        elif game_state == "playing":
+            if event.type == pygame.KEYDOWN and game_over:
+                # Restart the game
+                if event.key == pygame.K_SPACE:
+                    env.reset()
+                    ai_hidden = [row[:] for row in env.hidden_board]
+                    user_hidden = place_ships(env.board_size, getattr(env, 'ships', {'Battleship': 4, 'Cruiser': 3}))
+                    env.obs_board = [[0] * env.board_size for _ in range(env.board_size)]
+                    env.ai_obs_board = [[0] * env.board_size for _ in range(env.board_size)]
+                    ai_ship_cells_remaining = sum(sum(r) for r in ai_hidden)
+                    user_ship_cells_remaining = sum(sum(r) for r in user_hidden)
+                    user_turn = True
+                    game_over = False
+                    winner = None
+                    last_ai_move = None
+                # User pressed ESC
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                    break
 
-    # --- TURN HANDLING ---
+            # USER INPUT MODE (commented out for now)
+            '''
+            elif user_turn and not pending_ai_move and not game_over:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    mouse_x, mouse_y = event.pos
+                    col = mouse_x // cell_size
+                    row = mouse_y // cell_size
+                    if 0 <= row < env.board_size and 0 <= col < env.board_size:
+                        if env.obs_board[row][col] == 0:
+                            action = row * env.board_size + col
+                            obs, reward, term, trunc, info = env.step(action)
+                            if term or trunc:
+                                game_over = True
+                                winner = "User"
+                            pending_ai_move = True
+                            pygame.time.delay(200)
+            '''
+    if game_state == "start":
+        draw_start_screen()
+        clock.tick(30)
+        continue
+
+    # TURN HANDLING
     if not game_over:
         if user_turn:
             # User random move selecting from unknown AI cells
@@ -247,10 +312,12 @@ while running:
         msg_color = (255, 0, 0) if winner == "AI" else (0, 255, 0)
         msg = font_large.render(msg_text, True, msg_color)
         msg2 = font_small.render("Press SPACE to Restart", True, (255, 255, 255))
+        msg3 = font_small.render("Press ESC to Quit", True, (255, 255, 255))
 
         # Center both messages under the boards
         msg_rect = msg.get_rect(center=(screen.get_width() // 2, env.board_size * cell_size + 100))
         msg2_rect = msg2.get_rect(center=(screen.get_width() // 2, env.board_size * cell_size + 150))
+        msg3_rect = msg3.get_rect(center=(screen.get_width() // 2, env.board_size * cell_size + 200))
 
         # Draw black background behind both messages
         padding = 20
@@ -260,6 +327,7 @@ while running:
         # Draw messages
         screen.blit(msg, msg_rect)
         screen.blit(msg2, msg2_rect)
+        screen.blit(msg3, msg3_rect)
 
     pygame.display.flip()
     clock.tick(30)
