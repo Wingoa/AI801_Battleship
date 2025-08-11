@@ -10,14 +10,56 @@ pygame.display.set_caption("Battleship: User vs AI")
 clock = pygame.time.Clock()
 font_large = pygame.font.SysFont(None, 48)
 font_small = pygame.font.SysFont(None, 32)
+ships_dict = {'Battleship': 4, 'Cruiser': 3}
 
-# Load AI
+# Load environment just to get a ship layout for the user
 env = BattleshipEnv(board_size=6)
+env.ships = ships_dict
 env.reset()
-state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
-action_dim = env.action_space.n
+
+# Determine board/action dims for AI model (kept same size assumption)
+state_dim = env.board_size * env.board_size
+action_dim = env.board_size * env.board_size
 agent = DQNAgent(state_dim, action_dim)
 agent.load("trained_agent.pth")
+
+# --- Create AI hidden board (ships) ---
+def place_ships(board_size, ships_dict):
+    board = [[0] * board_size for _ in range(board_size)]
+    for length in ships_dict.values():
+        placed = False
+        while not placed:
+            orientation = random.choice(['horizontal', 'vertical'])
+            if orientation == 'horizontal':
+                row = random.randrange(0, board_size)
+                col = random.randrange(0, board_size - length + 1)
+                if all(board[row][c] == 0 for c in range(col, col + length)):
+                    for c in range(col, col + length):
+                        board[row][c] = 1
+                    placed = True
+            else:
+                row = random.randrange(0, board_size - length + 1)
+                col = random.randrange(0, board_size)
+                if all(board[r][col] == 0 for r in range(row, row + length)):
+                    for r in range(row, row + length):
+                        board[r][col] = 1
+                    placed = True
+    return board
+
+# User's ships already in env.hidden_board
+# AI's ships we generate separately (reuse env.ships if present)
+# AI's ships are those in env.hidden_board (env models AI target board for user)
+ai_hidden = [row[:] for row in env.hidden_board]
+
+# User's ships we generate separately (reuse env.ships if present)
+user_hidden = place_ships(env.board_size, ships_dict)
+
+# Reinitialize guess boards
+env.obs_board = [[0] * env.board_size for _ in range(env.board_size)]       # user guesses at AI
+env.ai_obs_board = [[0] * env.board_size for _ in range(env.board_size)]    # AI guesses at user
+
+ai_ship_cells_remaining = sum(sum(row) for row in ai_hidden)
+user_ship_cells_remaining = sum(sum(row) for row in user_hidden)
 
 # --- Load Images ---
 cell_size = 50
@@ -47,72 +89,59 @@ except pygame.error as e:
     exit()
 
 def draw_board():
-
-    if not isinstance(env, BattleshipEnv) or env.obs_board is None:
+    if not isinstance(env, BattleshipEnv):
         return
 
-    cell_size = 50
     margin = 20
 
-    # Draw User Board (left)
+    # User Board (left): shows user's ships + AI shots (env.ai_obs_board)
     for row in range(env.board_size):
         for col in range(env.board_size):
             x, y = col * cell_size, row * cell_size
-            screen.blit(water_img, (x, y))          # Water background
-            if env.hidden_board[row][col] == 1:     # Your ship visible
+            screen.blit(water_img, (x, y))
+            if user_hidden[row][col] == 1:
                 screen.blit(ship_img, (x, y))
-
-            cell_value = env.obs_board[row][col]
-            if cell_value == 1:                     # User hits
-                screen.blit(user_hit_img, (x, y))
-            elif cell_value == -1:                  # User misses
-                screen.blit(user_miss_img, (x, y))
-
-            # Draw Cell borders
+            val = env.ai_obs_board[row][col]
+            if val == 1:
+                screen.blit(ai_hit_img, (x, y))
+            elif val == -1:
+                screen.blit(ai_miss_img, (x, y))
             pygame.draw.rect(screen, (0, 0, 0), (x, y, cell_size, cell_size), 1)
 
-    # Draw AI Board (right)
+    # AI Board (right): shows only user shots (env.obs_board) no ships revealed
     x_offset = env.board_size * cell_size + margin
     for row in range(env.board_size):
         for col in range(env.board_size):
             x, y = x_offset + col * cell_size, row * cell_size
-            screen.blit(water_img, (x, y))         # Water background
-
-            cell_value = env.ai_obs_board[row][col]
-            if cell_value == 1:                    # AI hits
-                screen.blit(ai_hit_img, (x, y))
-            elif cell_value == -1:                 # AI misses
-                screen.blit(ai_miss_img, (x, y))
-
-            # Draw Cell borders
+            screen.blit(water_img, (x, y))
+            val = env.obs_board[row][col]
+            if val == 1:
+                screen.blit(user_hit_img, (x, y))
+            elif val == -1:
+                screen.blit(user_miss_img, (x, y))
             pygame.draw.rect(screen, (0, 0, 0), (x, y, cell_size, cell_size), 1)
 
-    # Draw labels
-    font = pygame.font.Font(None, 32)
-    user_label = font.render('Your Board', True, (255,255,255))
-    ai_label = font.render('AI Board', True, (255,255,255))
-    screen.blit(user_label, (10, env.board_size * cell_size + 5))
-    screen.blit(ai_label, (x_offset + 10, env.board_size * cell_size + 5))
+    # Labels
+    label_font = pygame.font.Font(None, 32)
+    screen.blit(label_font.render('Your Board', True, (255,255,255)), (10, env.board_size * cell_size + 5))
+    screen.blit(label_font.render('AI Board', True, (255,255,255)), (x_offset + 10, env.board_size * cell_size + 5))
 
-    # Draw legend at the bottom
+    # Legend
     legend_items = [
         (water_img, "Water"),
-        (user_hit_img, "User Hit"),
-        (user_miss_img, "User Miss"),
+        (user_hit_img, "Your Hit"),
+        (user_miss_img, "Your Miss"),
         (ai_hit_img, "AI Hit"),
         (ai_miss_img, "AI Miss"),
-        (ship_img, "Ship")
+        (ship_img, "Your Ship")
     ]
-
     legend_x = 10
     legend_y = env.board_size * cell_size + 50
-    legend_margin = 8  
     for img, label in legend_items:
         screen.blit(img, (legend_x, legend_y))
-        font = pygame.font.Font(None, 24)
-        text = font.render(label, True, (255, 255, 255))
-        text_y = legend_y + legend_margin
-        screen.blit(text, (legend_x + cell_size + 5, text_y))
+        lf = pygame.font.Font(None, 24)
+        text = lf.render(label, True, (255, 255, 255))
+        screen.blit(text, (legend_x + cell_size + 5, legend_y + 8))
         legend_y += cell_size
 
 def get_valid_user_actions(board):
@@ -124,12 +153,10 @@ def get_valid_user_actions(board):
     return valid_actions
 
 running = True
-user_turn = True
+user_turn = True  # True => User's turn, False => AI's turn
 game_over = False
 winner = None
-pending_ai_move = False
 last_ai_move = None
-env.ai_obs_board = [[0 for _ in range(env.board_size)] for _ in range(env.board_size)]
 
 while running:
     for event in pygame.event.get():
@@ -138,58 +165,79 @@ while running:
         elif event.type == pygame.KEYDOWN and game_over:
             if event.key == pygame.K_SPACE:
                 env.reset()
-                env.ai_obs_board = [[0 for _ in range(env.board_size)] for _ in range(env.board_size)]
+                # Rebuild boards
+                ai_hidden = [row[:] for row in env.hidden_board]
+                user_hidden = place_ships(env.board_size, getattr(env, 'ships', {'Battleship': 4, 'Cruiser': 3}))
+                env.obs_board = [[0] * env.board_size for _ in range(env.board_size)]
+                env.ai_obs_board = [[0] * env.board_size for _ in range(env.board_size)]
+                ai_ship_cells_remaining = sum(sum(r) for r in ai_hidden)
+                user_ship_cells_remaining = sum(sum(r) for r in user_hidden)
                 user_turn = True
                 game_over = False
                 winner = None
-                pending_ai_move = False
                 last_ai_move = None
+        # --- USER INPUT MODE (commented out) ---
+        # To enable human play, comment out the block above and uncomment this block:
+        '''
+        elif user_turn and not pending_ai_move and not game_over:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_x, mouse_y = event.pos
+                col = mouse_x // cell_size
+                row = mouse_y // cell_size
+                if 0 <= row < env.board_size and 0 <= col < env.board_size:
+                    if env.obs_board[row][col] == 0:
+                        action = row * env.board_size + col
+                        obs, reward, term, trunc, info = env.step(action)
+                        if term or trunc:
+                            game_over = True
+                            winner = "User"
+                        pending_ai_move = True
+                        pygame.time.delay(200)
+        '''
 
-    if user_turn and not game_over:
-        valid_actions = get_valid_user_actions(env.obs_board)
-        if valid_actions:
-            action = random.choice(valid_actions)
-            obs, reward, term, trunc, info = env.step(action)
-            if term or trunc:
-                game_over = True
-                winner = "User"
-            user_turn = False
-            pygame.time.delay(500)
-            pending_ai_move = True
-        else:
-            game_over = True
-            winner = "AI"
-
-    if pending_ai_move and not game_over:
-        state = env.get_state()
-        state = state.flatten() if hasattr(state, 'flatten') else np.array(state).flatten()
-        action = agent.select_action(state, eps_threshold=0.0)
-        ai_row = action // env.board_size
-        ai_col = action % env.board_size
-        last_ai_move = (ai_row, ai_col)
-
-        if env.ai_obs_board[ai_row][ai_col] != 0:
-            available = [(r, c) for r in range(env.board_size) for c in range(env.board_size) if env.ai_obs_board[r][c] == 0]
-            if available:
-                ai_row, ai_col = available[0]
-                last_ai_move = (ai_row, ai_col)
+    # --- TURN HANDLING ---
+    if not game_over:
+        if user_turn:
+            # User random move selecting from unknown AI cells
+            valid_actions = get_valid_user_actions(env.obs_board)
+            if valid_actions:
+                action = random.choice(valid_actions)
+                r = action // env.board_size
+                c = action % env.board_size
+                if ai_hidden[r][c] == 1:
+                    env.obs_board[r][c] = 1
+                    ai_ship_cells_remaining -= 1
+                    if ai_ship_cells_remaining == 0:
+                        game_over = True
+                        winner = "User"
+                else:
+                    env.obs_board[r][c] = -1
+                user_turn = False  # switch to AI
+                pygame.time.delay(140)
             else:
+                # No moves left -> AI wins by default
                 game_over = True
-                winner = "User"
-
-        if env.hidden_board[ai_row][ai_col] == 1:
-            env.ai_obs_board[ai_row][ai_col] = 1
+                winner = "AI"
         else:
-            env.ai_obs_board[ai_row][ai_col] = -1
-
-        hits = sum(row.count(1) for row in env.ai_obs_board)
-        total_ship_cells = sum(row.count(1) for row in env.hidden_board)
-        if hits >= total_ship_cells:
-            game_over = True
-            winner = "AI"
-
-        user_turn = True
-        pending_ai_move = False
+            # AI move using its own observation board
+            state = np.array(env.ai_obs_board, dtype=np.float32).flatten()
+            # Mask: choose among zeros
+            action = agent.select_action(state, eps_threshold=0.0)
+            r = action // env.board_size
+            c = action % env.board_size
+            if env.ai_obs_board[r][c] == 0:  # safety
+                if user_hidden[r][c] == 1:
+                    env.ai_obs_board[r][c] = 1
+                    user_ship_cells_remaining -= 1
+                    if user_ship_cells_remaining == 0:
+                        game_over = True
+                        winner = "AI"
+                else:
+                    env.ai_obs_board[r][c] = -1
+            last_ai_move = (r, c)
+            if not game_over:
+                user_turn = True
+            pygame.time.delay(140)
 
     screen.fill((0, 0, 0))
     draw_board()
