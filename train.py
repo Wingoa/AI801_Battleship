@@ -1,5 +1,3 @@
-# train.py
-
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,7 +14,6 @@ def train_varying_ships(
     eps_decay=5000
 ):
     ship_items = list(default_ships.items())
-    #max_ships = len(ship_items)
     max_ships=1
 
     agent = DQNAgent(
@@ -97,30 +94,17 @@ def train_varying_ships(
             plt.legend()
             plt.tight_layout()
             plt.show()
-
-
         else:
             print("No wins recorded—nothing to plot.")
 
     return agent
 
-def main():
+def run_training():
     trained_agent = None
 
     # Loop through training on board sizes 5-10
     for size in range(5, 7):  # 5,6,7,8,9,10
         print(f"\n>>> Starting curriculum training on {size}×{size} board <<<")
-
-        # Try increasing episodes as size of the grid expands
-        # This didn't produce any better results for reverting to 200 per
-        '''
-        if size in (5, 6):
-            episodes_per_setting = 200
-        elif size in (7, 8):
-            episodes_per_setting = 300
-        else:
-            episodes_per_setting = 500
-        '''
 
         episodes_per_setting = 500
 
@@ -139,13 +123,10 @@ def main():
 if __name__ == "__main__":
 
     # Kick off the training and get the trained agent
-    agent = main()
+    agent = run_training()
 
     # Save the trained agent
     if agent is not None:
         agent.save("trained_agent.pth")
     else:
         print("No trained agent to save.")
-
-
-
