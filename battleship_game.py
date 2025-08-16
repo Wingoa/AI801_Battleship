@@ -66,7 +66,7 @@ except pygame.error as e:
 
 
 # Load environment just to get a ship layout for the user
-env = BattleshipEnv(board_size=6)
+env = BattleshipEnv(board_size=6) # This will need to be changed to 10 for the newest version of the model
 env.ships = ships_dict
 env.reset()
 
@@ -74,7 +74,9 @@ env.reset()
 state_dim = env.board_size * env.board_size
 action_dim = env.board_size * env.board_size
 agent = DQNAgent(state_dim, action_dim)
-agent.load(resource_path("trained_agent.pth"))
+#agent.load(resource_path("trained_agent.pth")) # This will load in the model that is generated from training
+agent.load(resource_path("6x6_trained_agent.pth"))  # Load the 6x6 model
+
 
 # Create AI hidden ships
 def place_ships(board_size, ships_dict):

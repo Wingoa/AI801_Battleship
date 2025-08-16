@@ -1,3 +1,5 @@
+# train.py
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,11 +12,12 @@ def train_varying_ships(
     episodes_per_setting=200,
     start_ships=1,
     eps_start=1.0,
-    eps_final=0.05,
+    eps_final=0.0001,
     eps_decay=5000
 ):
     ship_items = list(default_ships.items())
-    max_ships=1
+    max_ships = len(ship_items)
+    #max_ships=1
 
     agent = DQNAgent(
         state_dim=board_size * board_size,
@@ -36,6 +39,9 @@ def train_varying_ships(
 
         agent.memory.clear()
 
+        if n_ships > start_ships:
+            episodes_per_setting = 100
+
         print(f"\n=== Training: {board_size}×{board_size}, {n_ships} ship(s) ===")
 
         for ep in range(1, episodes_per_setting + 1):
@@ -47,13 +53,14 @@ def train_varying_ships(
             last_reward = 0.0
             terminated = False
 
-
             while not done:
                 eps = eps_final + (eps_start - eps_final) * np.exp(-global_step / eps_decay)
                 action = agent.select_action(obs.flatten(), eps)
-                obs2, reward, term, trunc, info = env.step(action, player="ai")
+                obs2, reward, term, trunc, info = env.step(action)
                 done = term or trunc
-                
+
+                # push and learn
+
                 agent.memory.push(obs.flatten(), action, reward, obs2.flatten(), done)
                 agent.update()
 
@@ -99,11 +106,11 @@ def train_varying_ships(
 
     return agent
 
-def run_training():
+def main():
     trained_agent = None
 
     # Loop through training on board sizes 5-10
-    for size in range(5, 7):  # 5,6,7,8,9,10
+    for size in range(5, 11):  # 5,6,7,8,9,10
         print(f"\n>>> Starting curriculum training on {size}×{size} board <<<")
 
         episodes_per_setting = 500
@@ -114,7 +121,7 @@ def run_training():
             episodes_per_setting=episodes_per_setting,
             start_ships=1,
             eps_start=1.0,
-            eps_final=0.05,
+            eps_final=0.0001,
             eps_decay=5000
         )
 
@@ -123,10 +130,13 @@ def run_training():
 if __name__ == "__main__":
 
     # Kick off the training and get the trained agent
-    agent = run_training()
+    agent = main()
 
     # Save the trained agent
     if agent is not None:
         agent.save("trained_agent.pth")
     else:
         print("No trained agent to save.")
+
+
+

@@ -76,7 +76,7 @@ class BattleshipEnv(gym.Env):
                         placed = True
         return np.array(self.obs_board, dtype=np.int32), {}
     
-    def step(self, action, player):
+    def step(self, action):
         # Decode the action (integer 0-99) into grid coordinates
         row = action // self.board_size
         col = action % self.board_size
@@ -89,51 +89,40 @@ class BattleshipEnv(gym.Env):
         hit = False
         info = {}
 
-        current_obs_board = self.obs_board if player == 'user' else self.ai_obs_board
-
-        # Step penalty (applies to every move)
-        reward = -.5
-
-        if current_obs_board[row][col] != 0:
+        # Check if the agent already shot here
+        if self.obs_board[row][col] != 0:
             # This cell was already revealed (hit or miss before)
-            reward += -10  # strong penalty for redundant guess
+            reward = -5   # negative reward for redundant guess
         else:
             # This is a new cell being targeted
             if self.hidden_board[row][col] == 1:
                 # It's a hit!
-                current_obs_board[row][col] = 1  # Mark the cell as hit in the observation board
+                self.obs_board[row][col] = 1  # Mark the cell as hit in the observation board
                 self.hits_found += 1
                 self.ship_cells_remaining -= 1
                 hit = True
-                reward += 10.0  # big reward for a hit
-                # Bonus for sinking last ship cell
-                #if self.ship_cells_remaining == 0:
-                #    reward += 25.0  # bonus for sinking all ships
+                reward = 2.0  # reward for a hit
             else:
                 # It's a miss!
-                current_obs_board[row][col] = -1  # Mark the cell as a miss in the observation board
-                reward += -1  # mild penalty for a miss
+                self.obs_board[row][col] = -1  # Mark the cell as a miss in the observation board
+                reward = -1  # Small penalty for a miss to encourage fewer moves
 
         # Check if all ships have been sunk
         if self.ship_cells_remaining == 0:
             done = True
             terminated = True
             truncated = False
-            reward += 100  # large bonus for winning
+            reward = 10
         elif self.steps_taken >= self.max_steps:
             done = True
             terminated = False  # not all ships were found so treat as failure
             truncated = True
-            reward += -20  # penalty for losing
         else:
             done = False
             terminated = False
             truncated = False
 
-        if player == 'ai':
-            obs_array = np.array(self.ai_obs_board, dtype=np.int32)
-        else:
-            obs_array = np.array(self.obs_board, dtype=np.int32)
+        obs_array = np.array(self.obs_board, dtype=np.int32)
         info = {'ships_remaining': self.ship_cells_remaining, 'hit': hit, 'shots_taken': self.shots_taken}
         return obs_array, reward, terminated, truncated, info
 
